@@ -4,31 +4,28 @@
 <meta charset="UTF-8">
 <title>Career Accelerator</title>
 <style>
-body{font-family:Segoe UI;margin:0;padding:30px;background:#f4f7fb}
+body{font-family:Segoe UI;padding:30px;background:#f4f7fb}
 .card{background:white;padding:18px;border-radius:8px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
-button{padding:8px 14px;background:#0a66c2;color:white;border:none;border-radius:6px;cursor:pointer}
+button{padding:8px 14px;background:#0a66c2;color:white;border:none;border-radius:6px}
 </style>
 </head>
 <body>
 
 <h2>Career Accelerator</h2>
 
-<input id="role" placeholder="Search job role">
-<button onclick="load()">Search</button>
+<input id="role" placeholder="Search role">
+<button onclick="load()">Search Jobs</button>
 
 <br><br>
 
-<input type="file" id="resume"><br><br>
+<input type="file" id="resume">
 
 <div id="jobs"></div>
 
 <script>
 
-let resumeText="";
-
-resume.onchange=async e=>{
-resumeText=await e.target.files[0].text();
-};
+let resumeFile=null;
+resume.onchange=e=>resumeFile=e.target.files[0];
 
 async function load(){
 const r=await fetch(`/api/jobs?role=${role.value}`);
@@ -40,32 +37,25 @@ jobsDiv.innerHTML+=`
 <div class="card">
 <b>${j.title}</b><br>
 ${j.company.display_name}<br><br>
-<button onclick="opt('${encodeURIComponent(j.description)}')">
-Optimize Resume
-</button>
-<a href="${j.redirect_url}" target="_blank">
-<button>Apply</button>
-</a>
+<button onclick="opt('${encodeURIComponent(j.description)}')">Optimize Resume</button>
+<a href="${j.redirect_url}" target="_blank"><button>Apply</button></a>
 </div>`;
 });
 }
 
 async function opt(desc){
-if(!resumeText){alert("Upload resume first");return;}
+if(!resumeFile){alert("Upload resume first");return;}
 
-const r=await fetch("/optimize",{
-method:"POST",
-headers:{"Content-Type":"application/json"},
-body:JSON.stringify({
-resumeText,
-jobDesc:decodeURIComponent(desc)
-})
-});
+const form=new FormData();
+form.append("resume",resumeFile);
+form.append("jobDesc",decodeURIComponent(desc));
 
+const r=await fetch("/optimize",{method:"POST",body:form});
 const blob=await r.blob();
+
 const a=document.createElement("a");
 a.href=URL.createObjectURL(blob);
-a.download="Optimized.pdf";
+a.download="Optimized_Resume.pdf";
 a.click();
 }
 </script>
