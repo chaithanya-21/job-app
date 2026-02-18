@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Job Finder</title>
+<style>
+body{font-family:Arial;padding:30px;background:#f5f7fb}
+.card{background:white;padding:15px;border-radius:8px;margin-bottom:12px}
+button{padding:7px 12px;background:#0a66c2;color:white;border:none;border-radius:5px}
+</style>
+</head>
+<body>
+
+<h2>Job Finder</h2>
+
+<input id="role" placeholder="Search role">
+<button onclick="load()">Search</button>
+<br><br>
+
+<input type="file" id="resume"><br><br>
+
+<div id="jobs"></div>
+
+<script>
+
+let resumeText="";
+
+resume.onchange=async e=>{
+resumeText=await e.target.files[0].text();
+};
+
+async function load(){
+const r=await fetch(`/api/jobs?role=${role.value}`);
+const jobs=await r.json();
+
+jobsDiv.innerHTML="";
+jobs.forEach(j=>{
+jobsDiv.innerHTML+=`
+<div class="card">
+<b>${j.title}</b><br>
+${j.company.display_name}<br>
+<button onclick="opt('${encodeURIComponent(j.description)}')">Optimize Resume</button>
+<a href="${j.redirect_url}" target="_blank"><button>Apply</button></a>
+</div>`;
+});
+}
+
+async function opt(desc){
+if(!resumeText){alert("Upload resume");return;}
+const r=await fetch("/optimize",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({resumeText,jobDesc:decodeURIComponent(desc)})
+});
+const blob=await r.blob();
+const a=document.createElement("a");
+a.href=URL.createObjectURL(blob);
+a.download="Optimized.pdf";
+a.click();
+}
+</script>
+
+</body>
+</html>
