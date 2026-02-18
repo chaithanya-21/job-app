@@ -2,19 +2,20 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Job Finder</title>
+<title>Career Accelerator</title>
 <style>
-body{font-family:Arial;padding:30px;background:#f5f7fb}
-.card{background:white;padding:15px;border-radius:8px;margin-bottom:12px}
-button{padding:7px 12px;background:#0a66c2;color:white;border:none;border-radius:5px}
+body{font-family:Segoe UI;margin:0;padding:30px;background:#f4f7fb}
+.card{background:white;padding:18px;border-radius:8px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+button{padding:8px 14px;background:#0a66c2;color:white;border:none;border-radius:6px;cursor:pointer}
 </style>
 </head>
 <body>
 
-<h2>Job Finder</h2>
+<h2>Career Accelerator</h2>
 
-<input id="role" placeholder="Search role">
+<input id="role" placeholder="Search job role">
 <button onclick="load()">Search</button>
+
 <br><br>
 
 <input type="file" id="resume"><br><br>
@@ -38,20 +39,29 @@ jobs.forEach(j=>{
 jobsDiv.innerHTML+=`
 <div class="card">
 <b>${j.title}</b><br>
-${j.company.display_name}<br>
-<button onclick="opt('${encodeURIComponent(j.description)}')">Optimize Resume</button>
-<a href="${j.redirect_url}" target="_blank"><button>Apply</button></a>
+${j.company.display_name}<br><br>
+<button onclick="opt('${encodeURIComponent(j.description)}')">
+Optimize Resume
+</button>
+<a href="${j.redirect_url}" target="_blank">
+<button>Apply</button>
+</a>
 </div>`;
 });
 }
 
 async function opt(desc){
-if(!resumeText){alert("Upload resume");return;}
+if(!resumeText){alert("Upload resume first");return;}
+
 const r=await fetch("/optimize",{
 method:"POST",
 headers:{"Content-Type":"application/json"},
-body:JSON.stringify({resumeText,jobDesc:decodeURIComponent(desc)})
+body:JSON.stringify({
+resumeText,
+jobDesc:decodeURIComponent(desc)
+})
 });
+
 const blob=await r.blob();
 const a=document.createElement("a");
 a.href=URL.createObjectURL(blob);
