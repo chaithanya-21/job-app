@@ -6,57 +6,76 @@
 <style>
 body{font-family:Segoe UI;padding:30px;background:#f4f7fb}
 .card{background:white;padding:18px;border-radius:8px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
-button{padding:8px 14px;background:#0a66c2;color:white;border:none;border-radius:6px}
+button{padding:8px 14px;background:#0a66c2;color:white;border:none;border-radius:6px;cursor:pointer}
 </style>
 </head>
 <body>
 
 <h2>Career Accelerator</h2>
 
-<input id="role" placeholder="Search role">
-<button onclick="load()">Search Jobs</button>
+<input id="role" placeholder="Search job role">
+<button onclick="loadJobs()">Search</button>
 
 <br><br>
 
-<input type="file" id="resume">
+<input type="file" id="resume"><br><br>
 
 <div id="jobs"></div>
 
 <script>
 
 let resumeFile=null;
-resume.onchange=e=>resumeFile=e.target.files[0];
 
-async function load(){
-const r=await fetch(`/api/jobs?role=${role.value}`);
-const jobs=await r.json();
+document.getElementById("resume").onchange=e=>{
+    resumeFile=e.target.files[0];
+};
 
-jobsDiv.innerHTML="";
-jobs.forEach(j=>{
-jobsDiv.innerHTML+=`
-<div class="card">
-<b>${j.title}</b><br>
-${j.company.display_name}<br><br>
-<button onclick="opt('${encodeURIComponent(j.description)}')">Optimize Resume</button>
-<a href="${j.redirect_url}" target="_blank"><button>Apply</button></a>
-</div>`;
-});
+async function loadJobs(){
+
+    const role=document.getElementById("role").value;
+
+    const response=await fetch(`/api/jobs?role=${encodeURIComponent(role)}`);
+    const jobs=await response.json();
+
+    const container=document.getElementById("jobs");
+    container.innerHTML="";
+
+    jobs.forEach(j=>{
+        container.innerHTML+=`
+        <div class="card">
+            <b>${j.title}</b><br>
+            ${j.company.display_name}<br><br>
+            <button onclick="optimize('${encodeURIComponent(j.description)}')">
+                Optimize Resume
+            </button>
+            <a href="${j.redirect_url}" target="_blank">
+                <button>Apply</button>
+            </a>
+        </div>`;
+    });
 }
 
-async function opt(desc){
-if(!resumeFile){alert("Upload resume first");return;}
+async function optimize(desc){
 
-const form=new FormData();
-form.append("resume",resumeFile);
-form.append("jobDesc",decodeURIComponent(desc));
+    if(!resumeFile){
+        alert("Upload resume first");
+        return;
+    }
 
-const r=await fetch("/optimize",{method:"POST",body:form});
-const blob=await r.blob();
+    const form=new FormData();
+    form.append("resume",resumeFile);
+    form.append("jobDesc",decodeURIComponent(desc));
 
-const a=document.createElement("a");
-a.href=URL.createObjectURL(blob);
-a.download="Optimized_Resume.pdf";
-a.click();
+    const response=await fetch("/optimize",{
+        method:"POST",
+        body:form
+    });
+
+    const blob=await response.blob();
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="Optimized_Resume.pdf";
+    a.click();
 }
 </script>
 
