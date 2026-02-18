@@ -7,76 +7,85 @@ const PDFDocument=require("pdfkit");
 const pdfParse=require("pdf-parse");
 require("dotenv").config();
 
-const upload=multer({dest:"uploads/"});
 const app=express();
+const upload=multer({dest:"uploads/"});
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-app.get("/",(req,res)=>res.sendFile(__dirname+"/index.html"));
+app.get("/",(req,res)=>{
+    res.sendFile(__dirname+"/index.html");
+});
 
 /* JOB SEARCH */
 app.get("/api/jobs",async(req,res)=>{
-  const role=req.query.role||"Business Analyst";
-  try{
-    const r=await axios.get("https://api.adzuna.com/v1/api/jobs/in/search/1",{
-      params:{
-        app_id:process.env.APP_ID,
-        app_key:process.env.APP_KEY,
-        what:role,
-        results_per_page:10
-      }
-    });
-    res.json(r.data.results);
-  }catch(e){
-    res.status(500).json({error:"Job search failed"});
-  }
+    const role=req.query.role||"Business Analyst";
+
+    try{
+        const r=await axios.get("https://api.adzuna.com/v1/api/jobs/in/search/1",{
+            params:{
+                app_id:process.env.APP_ID,
+                app_key:process.env.APP_KEY,
+                what:role,
+                results_per_page:10
+            }
+        });
+
+        res.json(r.data.results);
+
+    }catch(e){
+        console.log("Job error:",e.message);
+        res.status(500).json({error:"Job fetch failed"});
+    }
 });
 
-/* TRUE RESUME OPTIMIZER */
+/* RESUME OPTIMIZER */
 app.post("/optimize",upload.single("resume"),async(req,res)=>{
-  try{
 
-    const buffer=fs.readFileSync(req.file.path);
-    const parsed=await pdfParse(buffer);
-    const resumeText=parsed.text;
+    try{
+        const buffer=fs.readFileSync(req.file.path);
+        const parsed=await pdfParse(buffer);
+        const resumeText=parsed.text;
 
-    const jobDesc=req.body.jobDesc;
+        const jobDesc=req.body.jobDesc;
 
-    const ai=await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model:"gpt-4o-mini",
-        messages:[
-          {
-            role:"system",
-            content:"Rewrite this resume professionally. Improve summary, skills, and experience. Keep ATS friendly formatting."
-          },
-          {
-            role:"user",
-            content:`Resume:\n${resumeText}\n\nJob Description:\n${jobDesc}`
-          }
-        ]
-      },
-      {headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}}
-    );
+        const ai=await axios.post(
+            "https://api.openai.com/v1/chat/completions",
+            {
+                model:"gpt-4o-mini",
+                messages:[
+                    {
+                        role:"system",
+                        content:"Rewrite this resume professionally. Improve summary, skills, and experience. Keep ATS friendly formatting."
+                    },
+                    {
+                        role:"user",
+                        content:`Resume:\n${resumeText}\n\nJob Description:\n${jobDesc}`
+                    }
+                ]
+            },
+            {
+                headers:{
+                    Authorization:`Bearer ${process.env.OPENAI_API_KEY}`
+                }
+            }
+        );
 
-    const optimized=ai.data.choices[0].message.content;
+        const optimized=ai.data.choices[0].message.content;
 
-    const path="optimized_resume.pdf";
-    const doc=new PDFDocument({margin:50});
-    doc.pipe(fs.createWriteStream(path));
+        const path="optimized_resume.pdf";
+        const doc=new PDFDocument({margin:50});
+        doc.pipe(fs.createWriteStream(path));
+        doc.fontSize(11).text(optimized,{align:"left"});
+        doc.end();
 
-    doc.fontSize(11).text(optimized,{align:"left"});
-    doc.end();
+        setTimeout(()=>res.download(path),800);
 
-    setTimeout(()=>res.download(path),800);
-
-  }catch(e){
-    console.log(e);
-    res.status(500).json({error:"Optimization failed"});
-  }
+    }catch(e){
+        console.log("Optimizer error:",e.message);
+        res.status(500).json({error:"Optimization failed"});
+    }
 });
 
 const PORT=process.env.PORT||5000;
