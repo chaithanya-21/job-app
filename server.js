@@ -42,46 +42,59 @@ app.get("/api/jobs",async(req,res)=>{
         res.json(jobs);
 
     }catch(e){
-        console.log(e.message);
+        console.log("Job error:",e.message);
         res.status(500).json({error:"Job fetch failed"});
     }
 });
 
-/* RESUME OPTIMIZER */
+/* SAFE RESUME OPTIMIZER */
 app.post("/optimize",upload.single("resume"),async(req,res)=>{
 
     try{
 
         const buffer=fs.readFileSync(req.file.path);
         const parsed=await pdfParse(buffer);
-
         const resumeText=parsed.text;
         const jobDesc=req.body.jobDesc;
 
-        const ai=await axios.post(
-            "https://api.openai.com/v1/chat/completions",
-            {
-                model:"gpt-4o-mini",
-                messages:[
-                    {role:"system",content:"Rewrite this resume professionally for ATS optimization."},
-                    {role:"user",content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`}
-                ]
-            },
-            {headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}}
-        );
+        let optimizedText=resumeText; // fallback
 
-        const optimized=ai.data.choices[0].message.content;
+        try{
+            const ai=await axios.post(
+                "https://api.openai.com/v1/chat/completions",
+                {
+                    model:"gpt-4o-mini",
+                    messages:[
+                        {role:"system",content:"Rewrite this resume professionally for ATS optimization."},
+                        {role:"user",content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`}
+                    ]
+                },
+                {
+                    headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}
+                }
+            );
+
+            optimizedText=ai.data.choices[0].message.content;
+
+        }catch(aiError){
+            console.log("AI failed — using fallback text");
+        }
 
         const path="optimized_resume.pdf";
+
         const doc=new PDFDocument({margin:50});
-        doc.pipe(fs.createWriteStream(path));
-        doc.fontSize(11).text(optimized,{align:"left"});
+        const stream=fs.createWriteStream(path);
+
+        doc.pipe(stream);
+        doc.fontSize(11).text(optimizedText,{align:"left"});
         doc.end();
 
-        setTimeout(()=>res.download(path),800);
+        stream.on("finish",()=>{
+            res.download(path,()=>fs.unlinkSync(path));
+        });
 
     }catch(e){
-        console.log(e);
+        console.log("Optimizer error:",e);
         res.status(500).json({error:"Optimization failed"});
     }
 });
