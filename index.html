@@ -2,53 +2,94 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Resume Optimizer</title>
+<title>Career Accelerator</title>
+
+<style>
+body{font-family:Segoe UI;padding:30px;background:#f4f7fb}
+.card{background:white;padding:18px;border-radius:10px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+button{padding:8px 14px;background:#0a66c2;color:white;border:none;border-radius:6px;margin-top:6px;cursor:pointer}
+input{padding:8px;border-radius:6px;border:1px solid #ccc;margin-right:6px}
+details{margin-top:8px}
+</style>
 </head>
 
 <body>
 
-<h2>Resume Optimizer</h2>
+<h2>Available Jobs</h2>
 
+<input id="role" placeholder="Search job role">
+<button onclick="loadJobs()">Search</button>
+
+<br><br>
+
+<label><b>Upload Resume (.docx)</b></label><br>
 <input type="file" id="resume" accept=".docx">
-<br><br>
 
-<textarea id="job" placeholder="Paste job description here" rows="10" cols="70"></textarea>
-<br><br>
-
-<button onclick="opt()">Optimize Resume</button>
+<div id="jobs"></div>
 
 <script>
 
-let resumeFile = null;
-document.getElementById("resume").onchange = e => resumeFile = e.target.files[0];
+let resumeFile=null;
+document.getElementById("resume").onchange=e=>resumeFile=e.target.files[0];
 
-async function opt() {
+async function loadJobs(){
 
-    if (!resumeFile) {
+    const role=document.getElementById("role").value;
+    const res=await fetch(`/api/jobs?role=${encodeURIComponent(role)}`);
+    const jobs=await res.json();
+
+    const container=document.getElementById("jobs");
+    container.innerHTML="";
+
+    jobs.forEach(j=>{
+        container.innerHTML+=`
+        <div class="card">
+            <b>${j.role}</b><br>
+            ${j.company}<br>
+            ${j.location}<br>
+            Salary: ${j.salary}<br>
+
+            <details>
+                <summary>Job Description</summary>
+                ${j.description}
+            </details>
+
+            <button onclick="optimize('${encodeURIComponent(j.description)}')">
+                Download Optimized Resume
+            </button>
+
+            <a href="${j.source}" target="_blank">
+                <button>Apply Now</button>
+            </a>
+        </div>`;
+    });
+}
+
+async function optimize(desc){
+
+    if(!resumeFile){
         alert("Upload resume first");
         return;
     }
 
-    const form = new FormData();
-    form.append("resume", resumeFile);
-    form.append("jobDesc", document.getElementById("job").value);
+    const form=new FormData();
+    form.append("resume",resumeFile);
+    form.append("jobDesc",decodeURIComponent(desc));
 
-    const response = await fetch("/optimize", {
-        method: "POST",
-        body: form
-    });
+    const response=await fetch("/optimize",{method:"POST",body:form});
 
-    if (!response.ok) {
-        alert("Optimization failed — check Render logs");
+    if(!response.ok){
+        alert("Optimization failed. Check logs.");
         return;
     }
 
-    const blob = await response.blob();
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "Optimized_Resume.docx";
-    link.click();
+    const blob=await response.blob();
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);
+    a.download="Optimized_Resume.docx";
+    a.click();
 }
+
 </script>
 
 </body>
