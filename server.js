@@ -14,11 +14,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-app.get("/",(req,res)=>{
-    res.sendFile(__dirname+"/index.html");
-});
+app.get("/",(req,res)=>res.sendFile(__dirname+"/index.html"));
 
-/* JOB SEARCH */
+/* JOB FETCH */
 app.get("/api/jobs",async(req,res)=>{
     const role=req.query.role||"Business Analyst";
 
@@ -32,10 +30,19 @@ app.get("/api/jobs",async(req,res)=>{
             }
         });
 
-        res.json(r.data.results);
+        const jobs=r.data.results.map(j=>({
+            role:j.title,
+            company:j.company.display_name,
+            location:j.location.display_name,
+            salary:j.salary_max||"Not specified",
+            description:j.description,
+            source:j.redirect_url
+        }));
+
+        res.json(jobs);
 
     }catch(e){
-        console.log("Job error:",e.message);
+        console.log(e.message);
         res.status(500).json({error:"Job fetch failed"});
     }
 });
@@ -44,10 +51,11 @@ app.get("/api/jobs",async(req,res)=>{
 app.post("/optimize",upload.single("resume"),async(req,res)=>{
 
     try{
+
         const buffer=fs.readFileSync(req.file.path);
         const parsed=await pdfParse(buffer);
-        const resumeText=parsed.text;
 
+        const resumeText=parsed.text;
         const jobDesc=req.body.jobDesc;
 
         const ai=await axios.post(
@@ -55,21 +63,11 @@ app.post("/optimize",upload.single("resume"),async(req,res)=>{
             {
                 model:"gpt-4o-mini",
                 messages:[
-                    {
-                        role:"system",
-                        content:"Rewrite this resume professionally. Improve summary, skills, and experience. Keep ATS friendly formatting."
-                    },
-                    {
-                        role:"user",
-                        content:`Resume:\n${resumeText}\n\nJob Description:\n${jobDesc}`
-                    }
+                    {role:"system",content:"Rewrite this resume professionally for ATS optimization."},
+                    {role:"user",content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`}
                 ]
             },
-            {
-                headers:{
-                    Authorization:`Bearer ${process.env.OPENAI_API_KEY}`
-                }
-            }
+            {headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}}
         );
 
         const optimized=ai.data.choices[0].message.content;
@@ -83,10 +81,9 @@ app.post("/optimize",upload.single("resume"),async(req,res)=>{
         setTimeout(()=>res.download(path),800);
 
     }catch(e){
-        console.log("Optimizer error:",e.message);
+        console.log(e);
         res.status(500).json({error:"Optimization failed"});
     }
 });
 
-const PORT=process.env.PORT||5000;
-app.listen(PORT,()=>console.log("Server running"));
+app.listen(process.env.PORT||5000,()=>console.log("Server running"));
