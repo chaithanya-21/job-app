@@ -46,16 +46,14 @@ app.get("/api/jobs",async(req,res)=>{
     }
 });
 
-/* WORD RESUME OPTIMIZER */
+/* RESUME OPTIMIZER */
 app.post("/optimize",upload.single("resume"),async(req,res)=>{
 
     try{
 
         const buffer=fs.readFileSync(req.file.path);
-
         const parsed=await mammoth.extractRawText({buffer});
         const resumeText=parsed.value;
-
         const jobDesc=req.body.jobDesc;
 
         const ai=await axios.post(
@@ -63,8 +61,14 @@ app.post("/optimize",upload.single("resume"),async(req,res)=>{
             {
                 model:"gpt-4o-mini",
                 messages:[
-                    {role:"system",content:"Rewrite this resume professionally. Keep headings and bullet structure. Make ATS optimized."},
-                    {role:"user",content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`}
+                    {
+                        role:"system",
+                        content:"Rewrite this resume professionally. Preserve headings and bullet structure. Keep concise ATS-optimized wording."
+                    },
+                    {
+                        role:"user",
+                        content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`
+                    }
                 ]
             },
             {headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}}
@@ -77,7 +81,15 @@ app.post("/optimize",upload.single("resume"),async(req,res)=>{
         const stream=fs.createWriteStream(path);
 
         doc.pipe(stream);
-        doc.fontSize(11).text(optimized,{align:"left"});
+
+        /* Use Calibri if available, otherwise fallback */
+        try{
+            doc.font("Calibri.ttf");
+        }catch{
+            doc.font("Helvetica");
+        }
+
+        doc.fontSize(10).text(optimized,{align:"left"});
         doc.end();
 
         stream.on("finish",()=>{
