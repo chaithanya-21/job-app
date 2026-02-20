@@ -42,11 +42,12 @@ app.get("/api/jobs",async(req,res)=>{
         res.json(jobs);
 
     }catch(e){
+        console.log("JOB FETCH ERROR:",e.message);
         res.status(500).json({error:"Job fetch failed"});
     }
 });
 
-/* RESUME OPTIMIZER */
+/* OPTIMIZER — SAFE VERSION */
 app.post("/optimize",upload.single("resume"),async(req,res)=>{
 
     try{
@@ -56,40 +57,33 @@ app.post("/optimize",upload.single("resume"),async(req,res)=>{
         const resumeText=parsed.value;
         const jobDesc=req.body.jobDesc;
 
-        const ai=await axios.post(
-            "https://api.openai.com/v1/chat/completions",
-            {
-                model:"gpt-4o-mini",
-                messages:[
-                    {
-                        role:"system",
-                        content:"Rewrite this resume professionally. Preserve headings and bullet structure. Keep concise ATS-optimized wording."
-                    },
-                    {
-                        role:"user",
-                        content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`
-                    }
-                ]
-            },
-            {headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}}
-        );
+        let optimizedText=resumeText; // fallback
 
-        const optimized=ai.data.choices[0].message.content;
+        try{
+            const ai=await axios.post(
+                "https://api.openai.com/v1/chat/completions",
+                {
+                    model:"gpt-4o-mini",
+                    messages:[
+                        {role:"system",content:"Rewrite resume professionally for ATS."},
+                        {role:"user",content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`}
+                    ]
+                },
+                {headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}}
+            );
+
+            optimizedText=ai.data.choices[0].message.content;
+
+        }catch(aiError){
+            console.log("OPENAI ERROR:",aiError.response?.data||aiError.message);
+        }
 
         const path="optimized_resume.pdf";
         const doc=new PDFDocument({margin:50});
         const stream=fs.createWriteStream(path);
 
         doc.pipe(stream);
-
-        /* Use Calibri if available, otherwise fallback */
-        try{
-            doc.font("Calibri.ttf");
-        }catch{
-            doc.font("Helvetica");
-        }
-
-        doc.fontSize(10).text(optimized,{align:"left"});
+        doc.fontSize(10).text(optimizedText,{align:"left"});
         doc.end();
 
         stream.on("finish",()=>{
@@ -97,8 +91,8 @@ app.post("/optimize",upload.single("resume"),async(req,res)=>{
         });
 
     }catch(e){
-        console.log(e);
-        res.status(500).json({error:"Optimization failed"});
+        console.log("OPTIMIZER CRASH:",e);
+        res.status(500).send("Server error");
     }
 });
 
