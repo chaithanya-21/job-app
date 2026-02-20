@@ -5,32 +5,64 @@
 <title>Career Accelerator</title>
 
 <style>
-body{font-family:Segoe UI;padding:30px;background:#f4f7fb}
-.card{background:white;padding:18px;border-radius:10px;margin-bottom:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
-button{padding:8px 14px;background:#0a66c2;color:white;border:none;border-radius:6px;cursor:pointer;margin-top:5px}
+body{
+    font-family:Segoe UI, Arial;
+    padding:30px;
+    background:#f4f7fb;
+}
+.card{
+    background:white;
+    padding:18px;
+    border-radius:10px;
+    margin-bottom:14px;
+    box-shadow:0 4px 12px rgba(0,0,0,.08);
+}
+button{
+    padding:8px 14px;
+    background:#0a66c2;
+    color:white;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    margin-top:6px;
+}
+button:hover{
+    background:#084a91;
+}
+input{
+    padding:8px;
+    border-radius:6px;
+    border:1px solid #ccc;
+}
 </style>
+
 </head>
 <body>
 
 <h2>Available Jobs</h2>
 
 <input id="role" placeholder="Search role">
-<button onclick="loadJobs()">Search</button>
+<button onclick="loadJobs()">Search Jobs</button>
 
 <br><br>
 
-<input type="file" id="resume">
+<label><b>Upload Resume (Word .docx only)</b></label><br>
+<input type="file" id="resume" accept=".docx">
 
 <div id="jobs"></div>
 
 <script>
 
 let resumeFile=null;
-document.getElementById("resume").onchange=e=>resumeFile=e.target.files[0];
+
+document.getElementById("resume").onchange=e=>{
+    resumeFile=e.target.files[0];
+};
 
 async function loadJobs(){
 
     const role=document.getElementById("role").value;
+
     const response=await fetch(`/api/jobs?role=${encodeURIComponent(role)}`);
     const jobs=await response.json();
 
@@ -40,14 +72,15 @@ async function loadJobs(){
     jobs.forEach(j=>{
         container.innerHTML+=`
         <div class="card">
+
             <b>${j.role}</b><br>
             ${j.company}<br>
             ${j.location}<br>
             Salary: ${j.salary}<br><br>
 
             <details>
-                <summary>Job Description</summary>
-                ${j.description}
+                <summary><b>Job Description</b></summary>
+                <p>${j.description}</p>
             </details>
 
             <button onclick="optimize('${encodeURIComponent(j.description)}')">
@@ -57,26 +90,39 @@ async function loadJobs(){
             <a href="${j.source}" target="_blank">
                 <button>Apply Now</button>
             </a>
+
         </div>`;
     });
 }
 
 async function optimize(desc){
 
-    if(!resumeFile){alert("Upload resume first");return;}
+    if(!resumeFile){
+        alert("Please upload your Word resume first.");
+        return;
+    }
 
     const form=new FormData();
     form.append("resume",resumeFile);
     form.append("jobDesc",decodeURIComponent(desc));
 
-    const r=await fetch("/optimize",{method:"POST",body:form});
-    const blob=await r.blob();
+    const response=await fetch("/optimize",{
+        method:"POST",
+        body:form
+    });
 
+    if(!response.ok){
+        alert("Optimization failed. Check server logs.");
+        return;
+    }
+
+    const blob=await response.blob();
     const a=document.createElement("a");
     a.href=URL.createObjectURL(blob);
     a.download="Optimized_Resume.pdf";
     a.click();
 }
+
 </script>
 
 </body>
