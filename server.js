@@ -42,64 +42,51 @@ app.get("/api/jobs",async(req,res)=>{
         res.json(jobs);
 
     }catch(e){
-        console.log("JOB FETCH ERROR:",e.message);
+        console.log("JOB ERROR:",e.message);
         res.status(500).json({error:"Job fetch failed"});
     }
 });
 
-/* SAFE WORD OPTIMIZER */
+/* REAL ATS OPTIMIZER */
 app.post("/optimize",upload.single("resume"),async(req,res)=>{
 
     try{
 
-        if(!req.file){
-            return res.status(400).send("No file uploaded");
-        }
-
         const buffer=fs.readFileSync(req.file.path);
+        const parsed=await mammoth.extractRawText({buffer});
+        const resumeText=parsed.value;
+        const jobDesc=req.body.jobDesc;
 
-        let resumeText="";
-
-        try{
-            const parsed=await mammoth.extractRawText({buffer});
-            resumeText=parsed.value;
-        }catch(parseError){
-            console.log("WORD PARSE ERROR:",parseError.message);
-            resumeText="Resume content could not be parsed.";
-        }
-
-        const jobDesc=req.body.jobDesc||"";
-
-        let optimizedText=resumeText;
-
-        /* TRY OPENAI */
-        try{
-            const ai=await axios.post(
-                "https://api.openai.com/v1/chat/completions",
-                {
-                    model:"gpt-4o-mini",
-                    messages:[
-                        {role:"system",content:"Rewrite this resume professionally for ATS optimization."},
-                        {role:"user",content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`}
-                    ]
-                },
-                {
-                    headers:{
-                        Authorization:`Bearer ${process.env.OPENAI_API_KEY}`
+        /* STRONG ATS PROMPT */
+        const ai=await axios.post(
+            "https://api.openai.com/v1/chat/completions",
+            {
+                model:"gpt-4o-mini",
+                messages:[
+                    {
+                        role:"system",
+                        content:
+                        "You are an expert ATS resume optimizer. Rewrite the resume so that it strongly matches the job description. Inject missing keywords naturally, improve bullets, align responsibilities, and enhance measurable achievements. Keep formatting readable."
+                    },
+                    {
+                        role:"user",
+                        content:
+                        `JOB DESCRIPTION:\n${jobDesc}\n\nRESUME:\n${resumeText}`
                     }
-                }
-            );
+                ],
+                temperature:0.4
+            },
+            {
+                headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}
+            }
+        );
 
-            optimizedText=ai.data.choices[0].message.content;
+        const optimized=ai.data.choices[0].message.content;
 
-        }catch(aiError){
-            console.log("OPENAI ERROR:",aiError.response?.data||aiError.message);
-        }
-
-        /* CREATE WORD FILE */
+        /* CREATE WORD OUTPUT */
         const doc=new Document({
             sections:[{
-                children:optimizedText.split("\n").map(line=>
+                children:optimized.split("\n").map(line=>
                     new Paragraph({
                         children:[
                             new TextRun({
@@ -120,8 +107,8 @@ app.post("/optimize",upload.single("resume"),async(req,res)=>{
         res.send(bufferDoc);
 
     }catch(e){
-        console.log("OPTIMIZER CRASH:",e);
-        res.status(500).send("Server error");
+        console.log("OPTIMIZER ERROR:",e.response?.data||e.message);
+        res.status(500).send("Optimization failed");
     }
 });
 
