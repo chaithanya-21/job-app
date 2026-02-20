@@ -6,17 +6,28 @@
 
 <style>
 body{
-    font-family:Segoe UI, Arial;
+    font-family:Segoe UI, Arial, sans-serif;
     padding:30px;
     background:#f4f7fb;
 }
+
+h2{
+    margin-bottom:20px;
+}
+
 .card{
     background:white;
-    padding:18px;
-    border-radius:10px;
-    margin-bottom:14px;
-    box-shadow:0 4px 12px rgba(0,0,0,.08);
+    padding:20px;
+    border-radius:12px;
+    margin-bottom:18px;
+    box-shadow:0 6px 16px rgba(0,0,0,0.08);
+    transition:all 0.2s ease;
 }
+
+.card:hover{
+    transform:translateY(-2px);
+}
+
 button{
     padding:8px 14px;
     background:#0a66c2;
@@ -24,24 +35,32 @@ button{
     border:none;
     border-radius:6px;
     cursor:pointer;
-    margin-top:6px;
+    margin-top:8px;
+    margin-right:6px;
 }
+
 button:hover{
     background:#084a91;
 }
+
 input{
     padding:8px;
     border-radius:6px;
     border:1px solid #ccc;
+    margin-right:6px;
+}
+
+details{
+    margin-top:10px;
 }
 </style>
-
 </head>
+
 <body>
 
 <h2>Available Jobs</h2>
 
-<input id="role" placeholder="Search role">
+<input id="role" placeholder="Search job role">
 <button onclick="loadJobs()">Search Jobs</button>
 
 <br><br>
@@ -49,78 +68,106 @@ input{
 <label><b>Upload Resume (Word .docx only)</b></label><br>
 <input type="file" id="resume" accept=".docx">
 
+<br><br>
+
 <div id="jobs"></div>
 
 <script>
 
-let resumeFile=null;
+let resumeFile = null;
 
-document.getElementById("resume").onchange=e=>{
-    resumeFile=e.target.files[0];
+document.getElementById("resume").onchange = function(e){
+    resumeFile = e.target.files[0];
 };
 
 async function loadJobs(){
 
-    const role=document.getElementById("role").value;
+    const roleInput = document.getElementById("role").value;
 
-    const response=await fetch(`/api/jobs?role=${encodeURIComponent(role)}`);
-    const jobs=await response.json();
+    if(!roleInput){
+        alert("Please enter a job role.");
+        return;
+    }
 
-    const container=document.getElementById("jobs");
-    container.innerHTML="";
+    try{
 
-    jobs.forEach(j=>{
-        container.innerHTML+=`
-        <div class="card">
+        const response = await fetch(`/api/jobs?role=${encodeURIComponent(roleInput)}`);
+        const jobs = await response.json();
 
-            <b>${j.role}</b><br>
-            ${j.company}<br>
-            ${j.location}<br>
-            Salary: ${j.salary}<br><br>
+        const container = document.getElementById("jobs");
+        container.innerHTML = "";
 
-            <details>
-                <summary><b>Job Description</b></summary>
-                <p>${j.description}</p>
-            </details>
+        if(!jobs || jobs.length === 0){
+            container.innerHTML = "<p>No jobs found.</p>";
+            return;
+        }
 
-            <button onclick="optimize('${encodeURIComponent(j.description)}')">
-                Download Optimized PDF
-            </button>
+        jobs.forEach(job => {
 
-            <a href="${j.source}" target="_blank">
-                <button>Apply Now</button>
-            </a>
+            const jobCard = document.createElement("div");
+            jobCard.className = "card";
 
-        </div>`;
-    });
+            jobCard.innerHTML = `
+                <b>${job.role}</b><br>
+                ${job.company}<br>
+                ${job.location}<br>
+                Salary: ${job.salary}<br>
+
+                <details>
+                    <summary><b>Job Description</b></summary>
+                    <p>${job.description}</p>
+                </details>
+
+                <button onclick="optimizeResume('${encodeURIComponent(job.description)}')">
+                    Download Optimized Word
+                </button>
+
+                <a href="${job.source}" target="_blank">
+                    <button>Apply Now</button>
+                </a>
+            `;
+
+            container.appendChild(jobCard);
+        });
+
+    }catch(error){
+        alert("Failed to load jobs. Check server logs.");
+    }
 }
 
-async function optimize(desc){
+async function optimizeResume(description){
 
     if(!resumeFile){
         alert("Please upload your Word resume first.");
         return;
     }
 
-    const form=new FormData();
-    form.append("resume",resumeFile);
-    form.append("jobDesc",decodeURIComponent(desc));
+    try{
 
-    const response=await fetch("/optimize",{
-        method:"POST",
-        body:form
-    });
+        const formData = new FormData();
+        formData.append("resume", resumeFile);
+        formData.append("jobDesc", decodeURIComponent(description));
 
-    if(!response.ok){
-        alert("Optimization failed. Check server logs.");
-        return;
+        const response = await fetch("/optimize", {
+            method: "POST",
+            body: formData
+        });
+
+        if(!response.ok){
+            alert("Optimization failed. Check server logs.");
+            return;
+        }
+
+        const blob = await response.blob();
+
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "Optimized_Resume.docx";
+        link.click();
+
+    }catch(error){
+        alert("Optimization error occurred.");
     }
-
-    const blob=await response.blob();
-    const a=document.createElement("a");
-    a.href=URL.createObjectURL(blob);
-    a.download="Optimized_Resume.pdf";
-    a.click();
 }
 
 </script>
