@@ -1,81 +1,106 @@
-const express = require("express");
-const axios = require("axios");
-const cors = require("cors");
-const multer = require("multer");
-const fs = require("fs");
-const mammoth = require("mammoth");
-const { Document, Packer, Paragraph, TextRun } = require("docx");
+const express=require("express");
+const axios=require("axios");
+const cors=require("cors");
+const multer=require("multer");
+const fs=require("fs");
+const mammoth=require("mammoth");
+const {Document,Packer,Paragraph,TextRun}=require("docx");
 require("dotenv").config();
 
-const app = express();
-const upload = multer({ dest: "uploads/" });
+const app=express();
+const upload=multer({dest:"uploads/"});
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(__dirname));
 
-app.get("/", (req, res) => res.sendFile(__dirname + "/index.html"));
+app.get("/",(req,res)=>res.sendFile(__dirname+"/index.html"));
 
-/* ATS OPTIMIZER */
-app.post("/optimize", upload.single("resume"), async (req, res) => {
+/* JOB SEARCH */
+app.get("/api/jobs",async(req,res)=>{
+    const role=req.query.role||"Business Analyst";
 
-    try {
+    try{
+        const r=await axios.get("https://api.adzuna.com/v1/api/jobs/in/search/1",{
+            params:{
+                app_id:process.env.APP_ID,
+                app_key:process.env.APP_KEY,
+                what:role,
+                results_per_page:10
+            }
+        });
 
-        if (!req.file) return res.status(400).send("No file uploaded");
+        const jobs=r.data.results.map(j=>({
+            role:j.title,
+            company:j.company.display_name,
+            location:j.location.display_name,
+            salary:j.salary_max||"Not specified",
+            description:j.description,
+            source:j.redirect_url
+        }));
 
-        const buffer = fs.readFileSync(req.file.path);
+        res.json(jobs);
 
-        const parsed = await mammoth.extractRawText({ buffer });
-        const resumeText = parsed.value || "No text detected in resume.";
+    }catch(e){
+        console.log("JOB ERROR:",e.message);
+        res.status(500).json({error:"Job fetch failed"});
+    }
+});
 
-        const jobDesc = req.body.jobDesc || "";
+/* RESUME OPTIMIZER */
+app.post("/optimize",upload.single("resume"),async(req,res)=>{
 
-        let optimized = resumeText;
+    try{
 
-        /* REAL OPENAI CALL */
-        try {
-            const ai = await axios.post(
+        const buffer=fs.readFileSync(req.file.path);
+        const parsed=await mammoth.extractRawText({buffer});
+        const resumeText=parsed.value;
+        const jobDesc=req.body.jobDesc;
+
+        let optimized=resumeText;
+
+        try{
+            const ai=await axios.post(
                 "https://api.openai.com/v1/chat/completions",
                 {
-                    model: "gpt-4o-mini",
-                    messages: [
+                    model:"gpt-4o-mini",
+                    messages:[
                         {
-                            role: "system",
+                            role:"system",
                             content:
-                                "Rewrite this resume so it strongly matches the job description. Add missing keywords, improve bullets, and optimize for ATS."
+                            "Rewrite this resume so it strongly matches the job description. Add missing keywords, improve bullets, and optimize for ATS."
                         },
                         {
-                            role: "user",
+                            role:"user",
                             content:
-                                `JOB:\n${jobDesc}\n\nRESUME:\n${resumeText}`
+                            `JOB:\n${jobDesc}\n\nRESUME:\n${resumeText}`
                         }
                     ],
-                    temperature: 0.3
+                    temperature:0.3
                 },
                 {
-                    headers: {
-                        "Content-Type": "application/json",
-                        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+                    headers:{
+                        "Content-Type":"application/json",
+                        Authorization:`Bearer ${process.env.OPENAI_API_KEY}`
                     }
                 }
             );
 
-            optimized = ai.data.choices[0].message.content;
+            optimized=ai.data.choices[0].message.content;
 
-        } catch (aiError) {
-            console.log("OPENAI FAILED:", aiError.response?.data || aiError.message);
+        }catch(aiError){
+            console.log("OPENAI ERROR:",aiError.response?.data||aiError.message);
         }
 
-        /* BUILD WORD FILE */
-        const doc = new Document({
-            sections: [{
-                children: optimized.split("\n").map(line =>
+        const doc=new Document({
+            sections:[{
+                children:optimized.split("\n").map(line=>
                     new Paragraph({
-                        children: [
+                        children:[
                             new TextRun({
-                                text: line,
-                                font: "Calibri",
-                                size: 20
+                                text:line,
+                                font:"Calibri",
+                                size:20
                             })
                         ]
                     })
@@ -83,22 +108,16 @@ app.post("/optimize", upload.single("resume"), async (req, res) => {
             }]
         });
 
-        const bufferDoc = await Packer.toBuffer(doc);
+        const bufferDoc=await Packer.toBuffer(doc);
 
-        res.setHeader(
-            "Content-Type",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        );
-        res.setHeader(
-            "Content-Disposition",
-            "attachment; filename=Optimized_Resume.docx"
-        );
+        res.setHeader("Content-Type","application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        res.setHeader("Content-Disposition","attachment; filename=Optimized_Resume.docx");
         res.send(bufferDoc);
 
-    } catch (e) {
-        console.log("SERVER ERROR:", e);
-        res.status(500).send("Server error");
+    }catch(e){
+        console.log("OPTIMIZER ERROR:",e);
+        res.status(500).send("Optimization failed");
     }
 });
 
-app.listen(process.env.PORT || 5000, () => console.log("Server running"));
+app.listen(process.env.PORT||5000,()=>console.log("Server running"));
