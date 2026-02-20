@@ -2,174 +2,53 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Career Accelerator</title>
-
-<style>
-body{
-    font-family:Segoe UI, Arial, sans-serif;
-    padding:30px;
-    background:#f4f7fb;
-}
-
-h2{
-    margin-bottom:20px;
-}
-
-.card{
-    background:white;
-    padding:20px;
-    border-radius:12px;
-    margin-bottom:18px;
-    box-shadow:0 6px 16px rgba(0,0,0,0.08);
-    transition:all 0.2s ease;
-}
-
-.card:hover{
-    transform:translateY(-2px);
-}
-
-button{
-    padding:8px 14px;
-    background:#0a66c2;
-    color:white;
-    border:none;
-    border-radius:6px;
-    cursor:pointer;
-    margin-top:8px;
-    margin-right:6px;
-}
-
-button:hover{
-    background:#084a91;
-}
-
-input{
-    padding:8px;
-    border-radius:6px;
-    border:1px solid #ccc;
-    margin-right:6px;
-}
-
-details{
-    margin-top:10px;
-}
-</style>
+<title>Resume Optimizer</title>
 </head>
 
 <body>
 
-<h2>Available Jobs</h2>
+<h2>Resume Optimizer</h2>
 
-<input id="role" placeholder="Search job role">
-<button onclick="loadJobs()">Search Jobs</button>
-
-<br><br>
-
-<label><b>Upload Resume (Word .docx only)</b></label><br>
 <input type="file" id="resume" accept=".docx">
-
 <br><br>
 
-<div id="jobs"></div>
+<textarea id="job" placeholder="Paste job description here" rows="10" cols="70"></textarea>
+<br><br>
+
+<button onclick="opt()">Optimize Resume</button>
 
 <script>
 
 let resumeFile = null;
+document.getElementById("resume").onchange = e => resumeFile = e.target.files[0];
 
-document.getElementById("resume").onchange = function(e){
-    resumeFile = e.target.files[0];
-};
+async function opt() {
 
-async function loadJobs(){
-
-    const roleInput = document.getElementById("role").value;
-
-    if(!roleInput){
-        alert("Please enter a job role.");
+    if (!resumeFile) {
+        alert("Upload resume first");
         return;
     }
 
-    try{
+    const form = new FormData();
+    form.append("resume", resumeFile);
+    form.append("jobDesc", document.getElementById("job").value);
 
-        const response = await fetch(`/api/jobs?role=${encodeURIComponent(roleInput)}`);
-        const jobs = await response.json();
+    const response = await fetch("/optimize", {
+        method: "POST",
+        body: form
+    });
 
-        const container = document.getElementById("jobs");
-        container.innerHTML = "";
-
-        if(!jobs || jobs.length === 0){
-            container.innerHTML = "<p>No jobs found.</p>";
-            return;
-        }
-
-        jobs.forEach(job => {
-
-            const jobCard = document.createElement("div");
-            jobCard.className = "card";
-
-            jobCard.innerHTML = `
-                <b>${job.role}</b><br>
-                ${job.company}<br>
-                ${job.location}<br>
-                Salary: ${job.salary}<br>
-
-                <details>
-                    <summary><b>Job Description</b></summary>
-                    <p>${job.description}</p>
-                </details>
-
-                <button onclick="optimizeResume('${encodeURIComponent(job.description)}')">
-                    Download Optimized Word
-                </button>
-
-                <a href="${job.source}" target="_blank">
-                    <button>Apply Now</button>
-                </a>
-            `;
-
-            container.appendChild(jobCard);
-        });
-
-    }catch(error){
-        alert("Failed to load jobs. Check server logs.");
-    }
-}
-
-async function optimizeResume(description){
-
-    if(!resumeFile){
-        alert("Please upload your Word resume first.");
+    if (!response.ok) {
+        alert("Optimization failed — check Render logs");
         return;
     }
 
-    try{
-
-        const formData = new FormData();
-        formData.append("resume", resumeFile);
-        formData.append("jobDesc", decodeURIComponent(description));
-
-        const response = await fetch("/optimize", {
-            method: "POST",
-            body: formData
-        });
-
-        if(!response.ok){
-            alert("Optimization failed. Check server logs.");
-            return;
-        }
-
-        const blob = await response.blob();
-
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "Optimized_Resume.docx";
-        link.click();
-
-    }catch(error){
-        alert("Optimization error occurred.");
-    }
+    const blob = await response.blob();
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "Optimized_Resume.docx";
+    link.click();
 }
-
 </script>
 
 </body>
