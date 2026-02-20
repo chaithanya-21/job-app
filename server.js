@@ -4,7 +4,7 @@ const cors=require("cors");
 const multer=require("multer");
 const fs=require("fs");
 const PDFDocument=require("pdfkit");
-const pdfParse=require("pdf-parse");
+const mammoth=require("mammoth");
 require("dotenv").config();
 
 const app=express();
@@ -42,51 +42,42 @@ app.get("/api/jobs",async(req,res)=>{
         res.json(jobs);
 
     }catch(e){
-        console.log("Job error:",e.message);
         res.status(500).json({error:"Job fetch failed"});
     }
 });
 
-/* SAFE RESUME OPTIMIZER */
+/* WORD RESUME OPTIMIZER */
 app.post("/optimize",upload.single("resume"),async(req,res)=>{
 
     try{
 
         const buffer=fs.readFileSync(req.file.path);
-        const parsed=await pdfParse(buffer);
-        const resumeText=parsed.text;
+
+        const parsed=await mammoth.extractRawText({buffer});
+        const resumeText=parsed.value;
+
         const jobDesc=req.body.jobDesc;
 
-        let optimizedText=resumeText; // fallback
+        const ai=await axios.post(
+            "https://api.openai.com/v1/chat/completions",
+            {
+                model:"gpt-4o-mini",
+                messages:[
+                    {role:"system",content:"Rewrite this resume professionally. Keep headings and bullet structure. Make ATS optimized."},
+                    {role:"user",content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`}
+                ]
+            },
+            {headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}}
+        );
 
-        try{
-            const ai=await axios.post(
-                "https://api.openai.com/v1/chat/completions",
-                {
-                    model:"gpt-4o-mini",
-                    messages:[
-                        {role:"system",content:"Rewrite this resume professionally for ATS optimization."},
-                        {role:"user",content:`Resume:\n${resumeText}\n\nJob:\n${jobDesc}`}
-                    ]
-                },
-                {
-                    headers:{Authorization:`Bearer ${process.env.OPENAI_API_KEY}`}
-                }
-            );
-
-            optimizedText=ai.data.choices[0].message.content;
-
-        }catch(aiError){
-            console.log("AI failed — using fallback text");
-        }
+        const optimized=ai.data.choices[0].message.content;
 
         const path="optimized_resume.pdf";
-
         const doc=new PDFDocument({margin:50});
         const stream=fs.createWriteStream(path);
 
         doc.pipe(stream);
-        doc.fontSize(11).text(optimizedText,{align:"left"});
+        doc.fontSize(11).text(optimized,{align:"left"});
         doc.end();
 
         stream.on("finish",()=>{
@@ -94,7 +85,7 @@ app.post("/optimize",upload.single("resume"),async(req,res)=>{
         });
 
     }catch(e){
-        console.log("Optimizer error:",e);
+        console.log(e);
         res.status(500).json({error:"Optimization failed"});
     }
 });
